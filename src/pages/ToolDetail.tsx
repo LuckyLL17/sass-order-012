@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { tools, categories } from '@/mock/tools';
 import { useStore } from '@/store/useStore';
+import { useTrackToolView } from '@/hooks/useTrackToolView';
 import ToolCard from '@/components/ToolCard';
 import type { Plan, PlanPeriod } from '@/types';
 
@@ -28,6 +29,9 @@ export default function ToolDetail() {
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [currentScreenshot, setCurrentScreenshot] = useState(0);
   const [isYearly, setIsYearly] = useState(false);
+
+  // 记录详情页浏览（无条件调用 Hook，兼容工具不存在的提前返回）
+  useTrackToolView(id, 'detail');
 
   const tool = tools.find(t => t.id === id);
 

@@ -1,24 +1,34 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Star, Users, ArrowRight } from 'lucide-react';
-import type { Tool } from '@/types';
+import { Star, Users, ArrowRight, ThumbsDown, BadgeCheck } from 'lucide-react';
+import type { Tool, ViewSource } from '@/types';
 import { categories } from '@/mock/tools';
+import { useTrackToolView } from '@/hooks/useTrackToolView';
 
 interface ToolCardProps {
   tool: Tool;
   index?: number;
+  /** 传入后自动记录首页/市场曝光或详情浏览，不传则不埋点（如相关工具） */
+  trackSource?: ViewSource;
+  /** 显示“已订阅”角标 */
+  subscribed?: boolean;
+  /** 传入后卡片右上角显示“不感兴趣”按钮 */
+  onDislike?: (tool: Tool) => void;
 }
 
-export default function ToolCard({ tool, index = 0 }: ToolCardProps) {
+export default function ToolCard({ tool, index = 0, trackSource, subscribed, onDislike }: ToolCardProps) {
   const categoryInfo = categories.find(c => c.id === tool.category);
+  const trackRef = useTrackToolView(tool.id, trackSource ?? 'home', Boolean(trackSource));
 
   return (
     <motion.div
+      ref={trackRef}
       initial={{ opacity: 0, y: 20 }}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       whileHover={{ y: -4 }}
+      className="relative h-full group/card"
     >
       <Link
         to={`/tool/${tool.id}`}
@@ -89,11 +99,35 @@ export default function ToolCard({ tool, index = 0 }: ToolCardProps) {
               </div>
             </div>
             <div className="px-3 py-1.5 rounded-lg bg-primary-500/10 text-primary-400 text-sm font-medium opacity-0 group-hover:opacity-100 transition-opacity">
-              立即订阅
+              {subscribed ? '继续使用' : '立即订阅'}
             </div>
           </div>
         </div>
       </Link>
+
+      {subscribed ? (
+        <span className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-green-500/20 text-green-400 border border-green-500/30 backdrop-blur-sm">
+          <BadgeCheck className="w-3.5 h-3.5" />
+          已订阅
+        </span>
+      ) : (
+        onDislike && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onDislike(tool);
+            }}
+            title="不感兴趣，减少此类推荐"
+            aria-label={`不感兴趣：${tool.name}`}
+            className="absolute top-3 right-3 inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium bg-dark-900/90 text-gray-400 border border-gray-700 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 backdrop-blur-sm opacity-100 md:opacity-0 md:group-hover/card:opacity-100 transition-all"
+          >
+            <ThumbsDown className="w-3.5 h-3.5" />
+            不感兴趣
+          </button>
+        )
+      )}
     </motion.div>
   );
 }

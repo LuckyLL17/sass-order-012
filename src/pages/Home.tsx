@@ -1,7 +1,7 @@
 import Hero from '@/components/home/Hero';
 import Stats from '@/components/home/Stats';
 import Categories from '@/components/home/Categories';
-import FeaturedTools from '@/components/home/FeaturedTools';
+import PersonalizedTools from '@/components/home/PersonalizedTools';
 import Features from '@/components/home/Features';
 import Pricing from '@/components/home/Pricing';
 
@@ -11,7 +11,7 @@ export default function Home() {
       <Hero />
       <Stats />
       <Categories />
-      <FeaturedTools />
+      <PersonalizedTools />
       <Features />
       <Pricing />
     </div>

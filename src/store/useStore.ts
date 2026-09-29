@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import type { User, UserSubscription, Tool, Category, SortOption, SubscriptionFilter, UsersRange } from '@/types';
+import type { User, UserSubscription, Tool, Category, SortOption, SubscriptionFilter, UsersRange, ViewSource, RecommendationSection, ToolView } from '@/types';
 import { userSubscriptions } from '@/mock/subscriptions';
 import { tools } from '@/mock/tools';
+import { buildRecommendations } from '@/lib/recommendations';
 
 interface NotificationSettings {
   emailNotifications: boolean;
@@ -54,6 +55,16 @@ interface Store {
   clearAllFilters: () => void;
   getAllTags: () => string[];
   getPriceRange: () => { min: number; max: number };
+
+  // 个性化推荐相关
+  toolViews: ToolView[];
+  dislikedToolIds: string[];
+  recordView: (toolId: string, source: ViewSource) => void;
+  clearViews: () => void;
+  markDisliked: (toolId: string) => void;
+  undoDislike: (toolId: string) => void;
+  clearFeedback: () => void;
+  getRecommendations: () => RecommendationSection[];
 }
 
 const defaultNotificationSettings: NotificationSettings = {
@@ -63,6 +74,30 @@ const defaultNotificationSettings: NotificationSettings = {
   marketingEmails: false,
   securityAlerts: true,
 };
+
+// —— 个性化数据的 localStorage 持久化（设备级，未登录也会保留浏览记录）——
+const VIEWS_STORAGE_KEY = 'subhub:tool-views';
+const DISLIKED_STORAGE_KEY = 'subhub:disliked-tools';
+const MAX_VIEW_RECORDS = 200;
+/** 同一页面同一工具的重复曝光合并窗口，兼容 StrictMode 重复挂载 */
+const VIEW_DEDUP_WINDOW = 30 * 1000;
+
+function loadPersisted<T>(key: string, fallback: T): T {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? (JSON.parse(raw) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function persist(key: string, value: unknown) {
+  try {
+    localStorage.setItem(key, JSON.stringify(value));
+  } catch {
+    // 隐私模式或存储已满时静默降级，不影响推荐功能
+  }
+}
 
 export const useStore = create<Store>((set, get) => ({
   user: null,
@@ -81,6 +116,8 @@ export const useStore = create<Store>((set, get) => ({
   isAuthenticated: false,
   notificationSettings: defaultNotificationSettings,
   userPassword: '',
+  toolViews: loadPersisted<ToolView[]>(VIEWS_STORAGE_KEY, []),
+  dislikedToolIds: loadPersisted<string[]>(DISLIKED_STORAGE_KEY, []),
 
   setUser: (user) => set({ user }),
   
@@ -334,5 +371,61 @@ export const useStore = create<Store>((set, get) => ({
       min: Math.min(...prices),
       max: Math.max(...prices),
     };
+  },
+
+  recordView: (toolId, source) => {
+    const state = get();
+    const now = Date.now();
+    const views = state.toolViews;
+    const lastIndex = views.reduceRight<number>((found, view, index) => {
+      if (found === -1 && view.toolId === toolId && view.source === source) return index;
+      return found;
+    }, -1);
+
+    // 同一来源的短时间重复挂载/曝光只更新时间，不新增记录
+    if (lastIndex !== -1 && now - views[lastIndex].timestamp < VIEW_DEDUP_WINDOW) {
+      return;
+    }
+
+    const nextViews = [...views, { toolId, source, timestamp: now }];
+    if (nextViews.length > MAX_VIEW_RECORDS) {
+      nextViews.splice(0, nextViews.length - MAX_VIEW_RECORDS);
+    }
+    set({ toolViews: nextViews });
+    persist(VIEWS_STORAGE_KEY, nextViews);
+  },
+
+  clearViews: () => {
+    set({ toolViews: [] });
+    persist(VIEWS_STORAGE_KEY, []);
+  },
+
+  markDisliked: (toolId) => {
+    const { dislikedToolIds } = get();
+    if (dislikedToolIds.includes(toolId)) return;
+    const next = [...dislikedToolIds, toolId];
+    set({ dislikedToolIds: next });
+    persist(DISLIKED_STORAGE_KEY, next);
+  },
+
+  undoDislike: (toolId) => {
+    const next = get().dislikedToolIds.filter(id => id !== toolId);
+    set({ dislikedToolIds: next });
+    persist(DISLIKED_STORAGE_KEY, next);
+  },
+
+  clearFeedback: () => {
+    set({ dislikedToolIds: [] });
+    persist(DISLIKED_STORAGE_KEY, []);
+  },
+
+  getRecommendations: () => {
+    const { tools, toolViews, subscriptions, dislikedToolIds } = get();
+    return buildRecommendations({
+      tools,
+      views: toolViews,
+      subscriptions,
+      dislikedToolIds,
+    });
   },
 }));

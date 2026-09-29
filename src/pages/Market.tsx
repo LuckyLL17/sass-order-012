@@ -640,7 +640,7 @@ export default function Market() {
             {filteredTools.length > 0 ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                 {filteredTools.map((tool, index) => (
-                  <ToolCard key={tool.id} tool={tool} index={index} />
+                  <ToolCard key={tool.id} tool={tool} index={index} trackSource="market" />
                 ))}
               </div>
             ) : (

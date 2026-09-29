@@ -7,6 +7,7 @@ export type MemberStatus = 'active' | 'pending';
 export type SortOption = 'popular' | 'rating' | 'price-low' | 'price-high' | 'newest' | 'users-desc' | 'users-asc';
 export type SubscriptionFilter = 'all' | 'subscribed' | 'not-subscribed' | 'expired';
 export type UsersRange = 'all' | 'lt-10k' | '10k-50k' | '50k-100k' | 'gt-100k';
+export type ViewSource = 'home' | 'market' | 'detail';
 
 export interface Plan {
   id: string;
@@ -87,4 +88,20 @@ export interface MonthlySpending {
 export interface CategorySpending {
   name: string;
   value: number;
+}
+
+/** 工具浏览记录：首页/市场为曝光，详情为主动查看 */
+export interface ToolView {
+  toolId: string;
+  source: ViewSource;
+  timestamp: number;
+}
+
+/** 首页个性化推荐分区 */
+export interface RecommendationSection {
+  /** recent: 最近浏览 | similar: 与订阅相似 | discover: 为你发现 */
+  key: 'recent' | 'similar' | 'discover';
+  title: string;
+  subtitle: string;
+  tools: Tool[];
 }

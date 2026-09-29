@@ -7,6 +7,7 @@ export type MemberStatus = 'active' | 'pending';
 export type SortOption = 'popular' | 'rating' | 'price-low' | 'price-high' | 'newest' | 'users-desc' | 'users-asc';
 export type SubscriptionFilter = 'all' | 'subscribed' | 'not-subscribed' | 'expired';
 export type UsersRange = 'all' | 'lt-10k' | '10k-50k' | '50k-100k' | 'gt-100k';
+export type ViewSource = 'home' | 'market' | 'detail';
 
 export interface Plan {
   id: string;
@@ -87,4 +88,11 @@ export interface MonthlySpending {
 export interface CategorySpending {
   name: string;
   value: number;
+}
+
+export interface ToolView {
+  toolId: string;
+  source: ViewSource;
+  viewCount: number;
+  lastViewedAt: number;
 }

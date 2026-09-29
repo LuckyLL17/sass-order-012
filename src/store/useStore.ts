@@ -1,7 +1,15 @@
 import { create } from 'zustand';
-import type { User, UserSubscription, Tool, Category, SortOption, SubscriptionFilter, UsersRange } from '@/types';
+import type { User, UserSubscription, Tool, Category, SortOption, SubscriptionFilter, UsersRange, ToolView, ViewSource } from '@/types';
 import { userSubscriptions } from '@/mock/subscriptions';
 import { tools } from '@/mock/tools';
+import {
+  loadPersonalization,
+  savePersonalization,
+  removePersonalization,
+  mergePersonalization,
+  upsertToolView,
+  type PersonalizationData,
+} from '@/lib/personalizationStorage';
 
 interface NotificationSettings {
   emailNotifications: boolean;
@@ -28,7 +36,9 @@ interface Store {
   isAuthenticated: boolean;
   notificationSettings: NotificationSettings;
   userPassword: string;
-  
+  toolViews: ToolView[];
+  dislikedToolIds: string[];
+
   setUser: (user: User | null) => void;
   setSelectedCategory: (category: Category | 'all') => void;
   setSearchQuery: (query: string) => void;
@@ -54,6 +64,10 @@ interface Store {
   clearAllFilters: () => void;
   getAllTags: () => string[];
   getPriceRange: () => { min: number; max: number };
+  recordToolView: (toolId: string, source: ViewSource) => void;
+  markToolDisliked: (toolId: string) => void;
+  clearDislikedFeedback: () => void;
+  clearToolViews: () => void;
 }
 
 const defaultNotificationSettings: NotificationSettings = {
@@ -64,7 +78,36 @@ const defaultNotificationSettings: NotificationSettings = {
   securityAlerts: true,
 };
 
-export const useStore = create<Store>((set, get) => ({
+export const useStore = create<Store>((set, get) => {
+  const initialPersonalization = loadPersonalization(null);
+
+  // 登录/注册成功后：合并游客与账号下的个性化数据，之后数据归属于账号
+  const activateUser = (user: User, password?: string) => {
+    const guestData: PersonalizationData = {
+      views: get().toolViews,
+      dislikedToolIds: get().dislikedToolIds,
+    };
+    const storedUserData = loadPersonalization(user.id);
+    const merged = mergePersonalization(guestData, storedUserData);
+
+    removePersonalization(null);
+    savePersonalization(merged, user.id);
+
+    set({
+      user,
+      isAuthenticated: true,
+      ...(password !== undefined ? { userPassword: password } : {}),
+      toolViews: merged.views,
+      dislikedToolIds: merged.dislikedToolIds,
+    });
+  };
+
+  const persistPersonalization = () => {
+    const { user, toolViews, dislikedToolIds } = get();
+    savePersonalization({ views: toolViews, dislikedToolIds }, user?.id ?? null);
+  };
+
+  return {
   user: null,
   subscriptions: userSubscriptions,
   tools: tools,
@@ -81,6 +124,8 @@ export const useStore = create<Store>((set, get) => ({
   isAuthenticated: false,
   notificationSettings: defaultNotificationSettings,
   userPassword: '',
+  toolViews: initialPersonalization.views,
+  dislikedToolIds: initialPersonalization.dislikedToolIds,
 
   setUser: (user) => set({ user }),
   
@@ -109,25 +154,25 @@ export const useStore = create<Store>((set, get) => ({
   login: async (email, password) => {
     await new Promise(resolve => setTimeout(resolve, 500));
     const { userPassword, user } = get();
-    
+
     if (email && password) {
       if (user && user.email === email && userPassword === password) {
-        set({ isAuthenticated: true });
+        activateUser(user, password);
         return true;
       }
-      
+
       const newUser: User = {
         id: 'user-' + Date.now(),
         name: email.split('@')[0],
         email: email,
         avatar: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional%20user%20avatar%20portrait%20simple%20minimal&image_size=square',
       };
-      set({ user: newUser, isAuthenticated: true, userPassword: password });
+      activateUser(newUser, password);
       return true;
     }
     return false;
   },
-  
+
   register: async (name, email, password) => {
     await new Promise(resolve => setTimeout(resolve, 500));
     if (name && email && password) {
@@ -137,13 +182,22 @@ export const useStore = create<Store>((set, get) => ({
         email: email,
         avatar: 'https://trae-api-cn.mchost.guru/api/ide/v1/text_to_image?prompt=professional%20user%20avatar%20portrait%20simple%20minimal&image_size=square',
       };
-      set({ user: newUser, isAuthenticated: true, userPassword: password });
+      activateUser(newUser, password);
       return true;
     }
     return false;
   },
-  
-  logout: () => set({ user: null, isAuthenticated: false }),
+
+  logout: () => {
+    // 登出后回到游客身份，加载游客维度的数据（与登录态完全隔离）
+    const guestData = loadPersonalization(null);
+    set({
+      user: null,
+      isAuthenticated: false,
+      toolViews: guestData.views,
+      dislikedToolIds: guestData.dislikedToolIds,
+    });
+  },
   
   updateUserProfile: (updates) =>
     set((state) => ({
@@ -335,4 +389,33 @@ export const useStore = create<Store>((set, get) => ({
       max: Math.max(...prices),
     };
   },
-}));
+
+  recordToolView: (toolId, source) => {
+    const exists = get().tools.some(t => t.id === toolId);
+    if (!exists) return;
+    set((state) => ({
+      toolViews: upsertToolView(state.toolViews, toolId, source, Date.now()),
+    }));
+    persistPersonalization();
+  },
+
+  markToolDisliked: (toolId) => {
+    set((state) =>
+      state.dislikedToolIds.includes(toolId)
+        ? state
+        : { dislikedToolIds: [...state.dislikedToolIds, toolId] }
+    );
+    persistPersonalization();
+  },
+
+  clearDislikedFeedback: () => {
+    set({ dislikedToolIds: [] });
+    persistPersonalization();
+  },
+
+  clearToolViews: () => {
+    set({ toolViews: [] });
+    persistPersonalization();
+  },
+  };
+});

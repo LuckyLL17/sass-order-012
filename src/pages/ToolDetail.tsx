@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
@@ -23,13 +23,20 @@ import type { Plan, PlanPeriod } from '@/types';
 export default function ToolDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { addSubscription } = useStore();
+  const { addSubscription, recordToolView } = useStore();
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [showSubscribeModal, setShowSubscribeModal] = useState(false);
   const [currentScreenshot, setCurrentScreenshot] = useState(0);
   const [isYearly, setIsYearly] = useState(false);
 
   const tool = tools.find(t => t.id === id);
+
+  // 进入详情页即记为一次浏览；StrictMode / 重复挂载由 store 层短窗口去重保证幂等
+  useEffect(() => {
+    if (id && tools.some(t => t.id === id)) {
+      recordToolView(id, 'detail');
+    }
+  }, [id, recordToolView]);
 
   if (!tool) {
     return (
@@ -337,7 +344,7 @@ export default function ToolDetail() {
             <h2 className="text-3xl font-bold text-white mb-8">相关工具</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               {relatedTools.map((relatedTool) => (
-                <ToolCard key={relatedTool.id} tool={relatedTool} />
+                <ToolCard key={relatedTool.id} tool={relatedTool} source="detail" />
               ))}
             </div>
           </motion.div>

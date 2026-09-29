@@ -1,16 +1,26 @@
 import { Link } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { Star, Users, ArrowRight } from 'lucide-react';
-import type { Tool } from '@/types';
+import { Star, Users, ArrowRight, ThumbsDown } from 'lucide-react';
+import type { Tool, ViewSource } from '@/types';
 import { categories } from '@/mock/tools';
+import { useStore } from '@/store/useStore';
 
 interface ToolCardProps {
   tool: Tool;
   index?: number;
+  /** 卡片所在场景，传入后点击卡片会记录浏览行为 */
+  source?: ViewSource;
+  /** 传入后显示「不感兴趣」按钮，用于个性化推荐区域 */
+  onDismiss?: (toolId: string) => void;
 }
 
-export default function ToolCard({ tool, index = 0 }: ToolCardProps) {
+export default function ToolCard({ tool, index = 0, source, onDismiss }: ToolCardProps) {
+  const recordToolView = useStore(s => s.recordToolView);
   const categoryInfo = categories.find(c => c.id === tool.category);
+
+  const handleNavigate = () => {
+    if (source) recordToolView(tool.id, source);
+  };
 
   return (
     <motion.div
@@ -19,9 +29,11 @@ export default function ToolCard({ tool, index = 0 }: ToolCardProps) {
       viewport={{ once: true }}
       transition={{ duration: 0.5, delay: index * 0.1 }}
       whileHover={{ y: -4 }}
+      className="relative h-full"
     >
       <Link
         to={`/tool/${tool.id}`}
+        onClick={handleNavigate}
         className="card-hover block group h-full"
       >
         <div className="flex items-start gap-4 mb-4">
@@ -94,6 +106,22 @@ export default function ToolCard({ tool, index = 0 }: ToolCardProps) {
           </div>
         </div>
       </Link>
+
+      {onDismiss && (
+        <button
+          type="button"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            onDismiss(tool.id);
+          }}
+          title="不感兴趣，减少此类推荐"
+          aria-label={`不感兴趣：${tool.name}`}
+          className="absolute top-3 right-3 p-1.5 rounded-lg bg-dark-900/80 border border-gray-700/60 text-gray-400 opacity-60 md:opacity-0 md:group-hover:opacity-100 hover:text-red-400 hover:border-red-500/50 hover:bg-red-500/10 transition-all z-10"
+        >
+          <ThumbsDown className="w-3.5 h-3.5" />
+        </button>
+      )}
     </motion.div>
   );
 }
